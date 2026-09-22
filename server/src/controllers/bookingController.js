@@ -5,7 +5,7 @@ import Joi from "joi";
 const createSchema = Joi.object({
   roomNumber: Joi.string().min(1).required(),
   startDate: Joi.date().required().less(Joi.ref("endDate")),
-  endDate: Joi.date().required().greater(Joi.ref("startDate")),
+  endDate: Joi.date().required(),
   purpose: Joi.string(),
   bookedBy: Joi.string(),
 });
@@ -13,9 +13,9 @@ const createSchema = Joi.object({
 const updateSchema = Joi.object({
   roomNumber: Joi.string().min(1),
   startDate: Joi.date().less(Joi.ref("endDate")),
-  endDate: Joi.date().greater(Joi.ref("endDate")),
+  endDate: Joi.date(),
   purpose: Joi.string,
-  bookedBy: Joi.string,
+  bookedBy: Joi.string().hex().length(24),
 });
 
 function publicBooking(b) {
@@ -25,7 +25,13 @@ function publicBooking(b) {
     startDate: b.startDate,
     endDate: b.endDate,
     purpose: b.purpose,
-    bookedBy: b.bookedBy,
+    bookedBy: b.bookedBy
+      ? {
+          id: b.bookedBy._id.toString(),
+          name: b.bookedBy.name,
+          email: b.bookedBy.email,
+        }
+      : null,
   };
 }
 
@@ -36,7 +42,10 @@ function publicBooking(b) {
 // TODO: implement per README.md section 3.
 export async function getAllBookings(req, res, next) {
   try {
-    const bookings = await Booking.find().sort({ createdAt: -1 }).lean();
+    const bookings = await Booking.find()
+      .populate("bookedBy", "name email")
+      .sort({ createdAt: -1 })
+      .lean();
     res.json({ bookings: bookings.map(publicBooking) });
   } catch (err) {
     next(err);
@@ -47,9 +56,13 @@ export async function getAllBookings(req, res, next) {
 // TODO: implement per README.md sections 3 and 5.
 export async function getBooking(req, res, next) {
   try {
-    const booking = await Booking.findById(req.params.id);
+    const booking = await Booking.findById(req.params.id).populate(
+      "bookedBy",
+      "name email",
+    );
+
     if (!booking) return res.status(404).json({ message: "booking not found" });
-    res.json({ booking: booking.map(publicBooking) });
+    res.json({ booking: publicBooking(booking) });
   } catch (err) {
     next(err);
   }
